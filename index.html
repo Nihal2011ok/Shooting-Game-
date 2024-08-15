@@ -9,14 +9,30 @@
 <body>
     <div id="game-container">
         <div id="player"></div>
-        <div id="score">Score: <span id="score-value">0</span></div>
-        <div id="health">Health: <span id="health-value">100</span></div>
+        <div id="hud">
+            <div id="score">Score: <span id="score-value">0</span></div>
+            <div id="health">Health: <span id="health-value">100</span></div>
+            <div id="wave">Wave: <span id="wave-value">1</span></div>
+            <div id="weapon">Weapon: <span id="weapon-value">Pistol</span></div>
+        </div>
+        <div id="mini-map"></div>
     </div>
     <div id="game-over" class="hidden">
         <h1>Game Over</h1>
         <p>Your score: <span id="final-score"></span></p>
         <button id="restart-button">Restart</button>
     </div>
+    <div id="upgrade-menu" class="hidden">
+        <h2>Upgrades</h2>
+        <button id="upgrade-health">Upgrade Health (+20) - 100 points</button>
+        <button id="upgrade-speed">Upgrade Speed (+1) - 150 points</button>
+        <button id="upgrade-damage">Upgrade Damage (+1) - 200 points</button>
+        <button id="close-upgrade-menu">Close</button>
+    </div>
+    <audio id="shoot-sound" src="shoot.mp3"></audio>
+    <audio id="hit-sound" src="hit.mp3"></audio>
+    <audio id="explosion-sound" src="explosion.mp3"></audio>
+    <audio id="powerup-sound" src="powerup.mp3"></audio>
     <script src="script.js"></script>
 </body>
 </html>

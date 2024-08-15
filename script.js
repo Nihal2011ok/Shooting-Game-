@@ -2,18 +2,38 @@ const gameContainer = document.getElementById('game-container');
 const player = document.getElementById('player');
 const scoreElement = document.getElementById('score-value');
 const healthElement = document.getElementById('health-value');
+const waveElement = document.getElementById('wave-value');
+const weaponElement = document.getElementById('weapon-value');
 const gameOverScreen = document.getElementById('game-over');
 const finalScoreElement = document.getElementById('final-score');
 const restartButton = document.getElementById('restart-button');
+const upgradeMenu = document.getElementById('upgrade-menu');
+const closeUpgradeMenuButton = document.getElementById('close-upgrade-menu');
+const miniMap = document.getElementById('mini-map');
+
+const shootSound = document.getElementById('shoot-sound');
+const hitSound = document.getElementById('hit-sound');
+const explosionSound = document.getElementById('explosion-sound');
+const powerupSound = document.getElementById('powerup-sound');
 
 let score = 0;
 let health = 100;
+let wave = 1;
 let enemies = [];
 let bullets = [];
 let powerUps = [];
+let particles = [];
 let playerSpeed = 5;
 let playerDamage = 1;
 let gameLoop;
+let waveTimeout;
+let currentWeapon = 'pistol';
+
+const weapons = {
+    pistol: { damage: 1, fireRate: 500, bulletSpeed: 10 },
+    shotgun: { damage: 1, fireRate: 1000, bulletSpeed: 8, bullets: 5, spread: 0.3 },
+    machineGun: { damage: 0.5, fireRate: 100, bulletSpeed: 12 }
+};
 
 const keys = {
     w: false,
@@ -22,12 +42,11 @@ const keys = {
     d: false
 };
 
-function updateScore() {
+function updateHUD() {
     scoreElement.textContent = score;
-}
-
-function updateHealth() {
     healthElement.textContent = health;
+    waveElement.textContent = wave;
+    weaponElement.textContent = currentWeapon;
 }
 
 function createEnemy() {
@@ -35,20 +54,23 @@ function createEnemy() {
     enemy.classList.add('enemy');
     
     const enemyType = Math.random();
-    let speed, health;
+    let speed, health, size;
     
     if (enemyType < 0.6) {
         enemy.classList.add('enemy-normal');
         speed = 2;
         health = 1;
+        size = 30;
     } else if (enemyType < 0.9) {
         enemy.classList.add('enemy-fast');
         speed = 3;
         health = 1;
+        size = 25;
     } else {
         enemy.classList.add('enemy-tank');
         speed = 1;
         health = 3;
+        size = 40;
     }
     
     const side = Math.floor(Math.random() * 4);
@@ -57,26 +79,28 @@ function createEnemy() {
     switch(side) {
         case 0: // Top
             x = Math.random() * window.innerWidth;
-            y = -30;
+            y = -size;
             break;
         case 1: // Right
-            x = window.innerWidth + 30;
+            x = window.innerWidth + size;
             y = Math.random() * window.innerHeight;
             break;
         case 2: // Bottom
             x = Math.random() * window.innerWidth;
-            y = window.innerHeight + 30;
+            y = window.innerHeight + size;
             break;
         case 3: // Left
-            x = -30;
+            x = -size;
             y = Math.random() * window.innerHeight;
             break;
     }
     
     enemy.style.left = `${x}px`;
     enemy.style.top = `${y}px`;
+    enemy.style.width = `${size}px`;
+    enemy.style.height = `${size}px`;
     gameContainer.appendChild(enemy);
-    enemies.push({ element: enemy, speed: speed, health: health });
+    enemies.push({ element: enemy, speed: speed, health: health, size: size });
 }
 
 function moveEnemies() {
@@ -94,12 +118,13 @@ function moveEnemies() {
         const newX = enemyX + Math.cos(angle) * enemy.speed;
         const newY = enemyY + Math.sin(angle) * enemy.speed;
         
-        enemy.element.style.left = `${newX - enemyRect.width / 2}px`;
-        enemy.element.style.top = `${newY - enemyRect.height / 2}px`;
+        enemy.element.style.left = `${newX - enemy.size / 2}px`;
+        enemy.element.style.top = `${newY - enemy.size / 2}px`;
         
         if (checkCollision(playerRect, enemyRect)) {
             health -= 10;
-            updateHealth();
+            updateHUD();
+            createExplosion(enemyX, enemyY);
             gameContainer.removeChild(enemy.element);
             enemies.splice(index, 1);
             
@@ -119,6 +144,7 @@ function checkCollision(rect1, rect2) {
 
 function gameOver() {
     cancelAnimationFrame(gameLoop);
+    clearTimeout(waveTimeout);
     gameOverScreen.classList.remove('hidden');
     finalScoreElement.textContent = score;
 }
@@ -129,14 +155,18 @@ function createBullet(x, y, angle) {
     bullet.style.left = `${x}px`;
     bullet.style.top = `${y}px`;
     gameContainer.appendChild(bullet);
-    bullets.push({ element: bullet, angle: angle });
+    
+    const weapon = weapons[currentWeapon];
+    bullets.push({ element: bullet, angle: angle, speed: weapon.bulletSpeed, damage: weapon.damage });
+    
+    shootSound.currentTime = 0;
+    shootSound.play();
 }
 
 function moveBullets() {
     bullets.forEach((bullet, index) => {
-        const speed = 10;
-        const newX = bullet.element.offsetLeft + Math.cos(bullet.angle) * speed;
-        const newY = bullet.element.offsetTop + Math.sin(bullet.angle) * speed;
+        const newX = bullet.element.offsetLeft + Math.cos(bullet.angle) * bullet.speed;
+        const newY = bullet.element.offsetTop + Math.sin(bullet.angle) * bullet.speed;
         
         bullet.element.style.left = `${newX}px`;
         bullet.element.style.top = `${newY}px`;
@@ -157,17 +187,21 @@ function checkBulletCollisions(bullet) {
         const enemyRect = enemy.element.getBoundingClientRect();
         
         if (checkCollision(bulletRect, enemyRect)) {
-            enemy.health -= playerDamage;
+            enemy.health -= bullet.damage;
             
             if (enemy.health <= 0) {
+                createExplosion(enemyRect.left + enemyRect.width / 2, enemyRect.top + enemyRect.height / 2);
                 gameContainer.removeChild(enemy.element);
                 enemies.splice(index, 1);
-                score++;
-                updateScore();
+                score += 10;
+                updateHUD();
             }
             
             gameContainer.removeChild(bullet.element);
             bullets.splice(bullets.indexOf(bullet), 1);
+            
+            hitSound.currentTime = 0;
+            hitSound.play();
         }
     });
 }
@@ -197,7 +231,7 @@ function createPowerUp() {
         powerUp.classList.add('power-up-health');
         effect = () => {
             health = Math.min(health + 20, 100);
-            updateHealth();
+            updateHUD();
         };
     } else if (type < 0.66) {
         powerUp.classList.add('power-up-speed');
@@ -229,7 +263,88 @@ function checkPowerUpCollisions() {
             powerUp.effect();
             gameContainer.removeChild(powerUp.element);
             powerUps.splice(index, 1);
+            
+            powerupSound.currentTime = 0;
+            powerupSound.play();
         }
+    });
+}
+
+function createExplosion(x, y) {
+    const explosion = document.createElement('div');
+    explosion.classList.add('explosion');
+    explosion.style.left = `${x - 25}px`;
+    explosion.style.top = `${y - 25}px`;
+    gameContainer.appendChild(explosion);
+    
+    explosionSound.currentTime = 0;
+    explosionSound.play();
+    
+    setTimeout(() => {
+        gameContainer.removeChild(explosion);
+    }, 500);
+    
+    createParticles(x, y);
+}
+
+function createParticles(x, y) {
+    for (let i = 0; i < 20; i++) {
+        const particle = document.createElement('div');
+        particle.classList.add('particle');
+        particle.style.left = `${x}px`;
+        particle.style.top = `${y}px`;
+        particle.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+        gameContainer.appendChild(particle);
+        
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 5 + 2;
+        const lifetime = Math.random() * 1000 + 500;
+        
+        particles.push({ element: particle, angle: angle, speed: speed, lifetime: lifetime });
+    }
+}
+
+function moveParticles() {
+    particles.forEach((particle, index) => {
+        const newX = particle.element.offsetLeft + Math.cos(particle.angle) * particle.speed;
+        const newY = particle.element.offsetTop + Math.sin(particle.angle) * particle.speed;
+        
+        particle.element.style.left = `${newX}px`;
+        particle.element.style.top = `${newY}px`;
+        
+        particle.lifetime -= 16; // Assuming 60 FPS
+        
+        if (particle.lifetime <= 0) {
+            gameContainer.removeChild(particle.element);
+            particles.splice(index, 1);
+        } else {
+            particle.element.style.opacity = particle.lifetime / 1500;
+        }
+    });
+}
+
+function updateMiniMap() {
+    miniMap.innerHTML = '';
+    const scale = 150 / Math.max(window.innerWidth, window.innerHeight);
+    
+    const playerDot = document.createElement('div');
+    playerDot.style.position = 'absolute';
+    playerDot.style.width = '4px';
+    playerDot.style.height = '4px';
+    playerDot.style.backgroundColor = 'blue';
+    playerDot.style.left = `${player.offsetLeft * scale}px`;
+    playerDot.style.top = `${player.offsetTop * scale}px`;
+    miniMap.appendChild(playerDot);
+    
+    enemies.forEach(enemy => {
+        const enemyDot = document.createElement('div');
+        enemyDot.style.position = 'absolute';
+        enemyDot.style.width = '3px';
+        enemyDot.style.height = '3px';
+        enemyDot.style.backgroundColor = 'red';
+        enemyDot.style.left = `${enemy.element.offsetLeft * scale}px`;
+        enemyDot.style.top = `${enemy.element.offsetTop * scale}px`;
+        miniMap.appendChild(enemyDot);
     });
 }
 
@@ -237,14 +352,32 @@ function gameLoop() {
     movePlayer();
     moveEnemies();
     moveBullets();
+    moveParticles();
     checkPowerUpCollisions();
+    updateMiniMap();
     requestAnimationFrame(gameLoop);
+}
+
+function startWave() {
+    wave++;
+    updateHUD();
+    
+    for (let i = 0; i < wave * 5; i++) {
+        setTimeout(createEnemy, i * 500);
+    }
+    
+    waveTimeout = setTimeout(startWave, wave * 5 * 500 + 5000);
 }
 
 document.addEventListener('keydown', (e) => {
     if (e.key in keys) {
         keys[e.key] = true;
     }
+    
+    if (e.key === '1') currentWeapon = 'pistol';
+    if (e.key === '2') currentWeapon = 'shotgun';
+    if (e.key === '3') currentWeapon = 'machineGun';
+    updateHUD();
 });
 
 document.addEventListener('keyup', (e) => {
@@ -253,34 +386,85 @@ document.addEventListener('keyup', (e) => {
     }
 });
 
-document.addEventListener('mousemove', (e) => {
-    const playerRect = player.getBoundingClientRect();
-    const playerX = playerRect.left + playerRect.width / 2;
-    const playerY = playerRect.top + playerRect.height / 2;
-    const angle = Math.atan2(e.clientY - playerY, e.clientX - playerX);
-    player.style.transform = `rotate(${angle}rad)`;
+let lastShot = 0;
+document.addEventListener('mousedown', (e) => {
+    const shoot = () => {
+        const playerRect = player.getBoundingClientRect();
+        const playerX = playerRect.left + playerRect.width / 2;
+        const playerY = playerRect.top + playerRect.height / 2;
+        const angle = Math.atan2(e.clientY - playerY, e.clientX - playerX);
+        
+        if (currentWeapon === 'shotgun') {
+            for (let i = 0; i < weapons.shotgun.bullets; i++) {
+                const spreadAngle = angle + (Math.random() - 0.5) * weapons.shotgun.spread;
+                createBullet(playerX, playerY, spreadAngle);
+            }
+        } else {
+            createBullet(playerX, playerY, angle);
+        }
+        
+        lastShot = Date.now();
+    };
+    
+    if (Date.now() - lastShot > weapons[currentWeapon].fireRate) {
+        shoot();
+    }
 });
 
-document.addEventListener('click', (e) => {
-    const playerRect = player.getBoundingClientRect();
-    const playerX = playerRect.left + playerRect.width / 2;
-    const playerY = playerRect.top + playerRect.height / 2;
-    const angle = Math.atan2(e.clientY - playerY, e.clientX - playerX);
-    createBullet(playerX, playerY, angle);
+let shootingInterval;
+
+document.addEventListener('mousedown', (e) => {
+    if (Date.now() - lastShot > weapons[currentWeapon].fireRate) {
+        const shoot = () => {
+            const playerRect = player.getBoundingClientRect();
+            const playerX = playerRect.left + playerRect.width / 2;
+            const playerY = playerRect.top + playerRect.height / 2;
+            const angle = Math.atan2(e.clientY - playerY, e.clientX - playerX);
+            
+            if (currentWeapon === 'shotgun') {
+                for (let i = 0; i < weapons.shotgun.bullets; i++) {
+                    const spreadAngle = angle + (Math.random() - 0.5) * weapons.shotgun.spread;
+                    createBullet(playerX, playerY, spreadAngle);
+                }
+            } else {
+                createBullet(playerX, playerY, angle);
+            }
+            
+            lastShot = Date.now();
+        };
+
+        shootingInterval = setInterval(shoot, weapons[currentWeapon].fireRate);
+        shoot();
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    clearInterval(shootingInterval);
 });
 
 restartButton.addEventListener('click', () => {
-    location.reload();
+    
+    score = 0;
+    health = 100;
+    wave = 1;
+    enemies = [];
+    bullets = [];
+    powerUps = [];
+    particles = [];
+    playerSpeed = 5;
+    playerDamage = 1;
+    currentWeapon = 'pistol';
+    updateHUD();
+    gameOverScreen.classList.add('hidden');
+    startWave();
+    gameLoop = requestAnimationFrame(gameLoop);
 });
 
-function startGame() {
-    player.style.left = `${window.innerWidth / 2 - 20}px`;
-    player.style.top = `${window.innerHeight / 2 - 20}px`;
-    updateScore();
-    updateHealth();
-    gameLoop = requestAnimationFrame(gameLoop);
-    setInterval(createEnemy, 1000);
-    setInterval(createPowerUp, 10000);
-}
+closeUpgradeMenuButton.addEventListener('click', () => {
+    upgradeMenu.classList.add('hidden');
+});
 
-startGame();
+
+updateHUD();
+startWave();
+gameLoop = requestAnimationFrame(gameLoop);
