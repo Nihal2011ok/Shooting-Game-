@@ -21,6 +21,11 @@ body {
     border-radius: 50%;
     transition: transform 0.1s;
 }
+#player {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
 
 .enemy {
     width: 30px;

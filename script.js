@@ -373,11 +373,6 @@ document.addEventListener('keydown', (e) => {
     if (e.key in keys) {
         keys[e.key] = true;
     }
-    
-    if (e.key === '1') currentWeapon = 'pistol';
-    if (e.key === '2') currentWeapon = 'shotgun';
-    if (e.key === '3') currentWeapon = 'machineGun';
-    updateHUD();
 });
 
 document.addEventListener('keyup', (e) => {
@@ -385,6 +380,7 @@ document.addEventListener('keyup', (e) => {
         keys[e.key] = false;
     }
 });
+
 
 let lastShot = 0;
 document.addEventListener('mousedown', (e) => {
@@ -405,15 +401,14 @@ document.addEventListener('mousedown', (e) => {
         
         lastShot = Date.now();
     };
-    
+
     if (Date.now() - lastShot > weapons[currentWeapon].fireRate) {
         shoot();
     }
 });
 
 let shootingInterval;
-
-document.addEventListener('mousedown', (e) => {
+document.addEventListener('mousedown', () => {
     if (Date.now() - lastShot > weapons[currentWeapon].fireRate) {
         const shoot = () => {
             const playerRect = player.getBoundingClientRect();
@@ -443,7 +438,6 @@ document.addEventListener('mouseup', () => {
 });
 
 restartButton.addEventListener('click', () => {
-    
     score = 0;
     health = 100;
     wave = 1;
